@@ -27,6 +27,10 @@
 #else
 #include <unistd.h>
 #endif
+#ifdef __MVS__
+#define _POSIX_SOURCE
+#include <sys/stat.h>
+#endif
 
 #include "build_log.h"
 #include "graph.h"
@@ -35,7 +39,7 @@
 
 namespace {
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__MVS__)
 #ifndef _mktemp_s
 /// mingw has no mktemp.  Implement one with the same type as the one
 /// found in the Windows API.
@@ -54,7 +58,11 @@ char* mkdtemp(char* name_template) {
     return NULL;
   }
 
+#ifdef __MVS__
+  err = mkdir(name_template, 0777);
+#else
   err = _mkdir(name_template);
+#endif
   if (err < 0) {
     perror("mkdir");
     return NULL;

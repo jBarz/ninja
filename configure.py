@@ -62,12 +62,14 @@ class Platform(object):
             self._platform = 'aix'
         elif self._platform.startswith('dragonfly'):
             self._platform = 'dragonfly'
+        elif self._platform.startswith('zos'):
+            self._platform = 'zos'
 
     @staticmethod
     def known_platforms():
       return ['linux', 'darwin', 'freebsd', 'openbsd', 'solaris', 'sunos5',
               'mingw', 'msvc', 'gnukfreebsd', 'bitrig', 'netbsd', 'aix',
-              'dragonfly']
+              'dragonfly', 'zos']
 
     def platform(self):
         return self._platform
@@ -97,6 +99,9 @@ class Platform(object):
     def is_aix(self):
         return self._platform == 'aix'
 
+    def is_zos(self):
+        return self._platform == 'zos'
+
     def uses_usr_local(self):
         return self._platform in ('freebsd', 'openbsd', 'bitrig', 'dragonfly')
 
@@ -107,7 +112,8 @@ class Platform(object):
     def supports_ninja_browse(self):
         return (not self.is_windows()
                 and not self.is_solaris()
-                and not self.is_aix())
+                and not self.is_aix()
+                and not self.is_zos())
 
     def can_rebuild_in_place(self):
         return not (self.is_windows() or self.is_aix())
@@ -269,6 +275,8 @@ objext = '.o'
 if platform.is_msvc():
     CXX = 'cl'
     objext = '.obj'
+elif platform.is_zos():
+    CXX = 'njsc++'
 
 def src(filename):
     return os.path.join('$root', 'src', filename)
@@ -366,6 +374,14 @@ elif platform.is_solaris():
     cflags.remove('-fvisibility=hidden')
 elif platform.is_aix():
     cflags.remove('-fvisibility=hidden')
+elif platform.is_zos():
+    cflags.remove('-fno-exceptions')
+    cflags.remove('-fvisibility=hidden')
+    cflags.remove('-pipe')
+    cflags.remove('-fno-rtti')
+    cflags.append('-D_XOPEN_SOURCE_EXTENDED')
+    cflags.append('-q64')
+    ldflags.append('-q64')
 elif platform.is_msvc():
     pass
 else:
@@ -413,6 +429,12 @@ if platform.is_msvc():
         description='CXX $out',
         deps='msvc'  # /showIncludes is included in $cflags.
     )
+elif platform.is_zos():
+    n.rule('cxx',
+        command='$cxx -qmakedep=gcc -MT $out -MF $out.d $cflags -c $in -o $out',
+        depfile='$out.d',
+        deps='gcc',
+        description='CXX $out')
 else:
     n.rule('cxx',
         command='$cxx -MMD -MT $out -MF $out.d $cflags -c $in -o $out',
@@ -463,6 +485,8 @@ if platform.supports_ninja_browse():
 n.comment('the depfile parser and ninja lexers are generated using re2c.')
 def has_re2c():
     try:
+        if platform.is_zos():
+            return False
         proc = subprocess.Popen(['re2c', '-V'], stdout=subprocess.PIPE)
         return int(proc.communicate()[0], 10) >= 1103
     except OSError:
@@ -513,6 +537,8 @@ if platform.is_windows():
 else:
     objs += cxx('subprocess-posix')
 if platform.is_aix():
+    objs += cc('getopt')
+if platform.is_zos():
     objs += cc('getopt')
 if platform.is_msvc():
     ninja_lib = n.build(built('ninja.lib'), 'ar', objs)

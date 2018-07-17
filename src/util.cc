@@ -49,6 +49,8 @@
 #include <libperfstat.h>
 #elif defined(linux) || defined(__GLIBC__)
 #include <sys/sysinfo.h>
+#elif defined(__MVS__)
+#define getloadavg(X, Y) -1
 #endif
 
 #include "edit_distance.h"
@@ -470,6 +472,8 @@ int GetProcessorCount() {
   SYSTEM_INFO info;
   GetNativeSystemInfo(&info);
   return info.dwNumberOfProcessors;
+#elif defined(__MVS__)
+  return 8;
 #else
   return sysconf(_SC_NPROCESSORS_ONLN);
 #endif

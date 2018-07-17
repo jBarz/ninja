@@ -17,6 +17,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+#ifdef __MVS__
+# include <unistd.h>
+#endif
 
 #include "disk_interface.h"
 #include "graph.h"
@@ -49,6 +52,11 @@ bool ManifestParser::Load(const string& filename, string* err, Lexer* parent) {
   // null-terminated (although in practice - libc++, libstdc++, msvc's stl --
   // it is, and C++11 demands that too), so add an explicit nul byte.
   contents.resize(contents.size() + 1);
+
+  std::transform(contents.begin(), contents.end(), contents.begin(), [] (char c) -> char {
+    __e2a_l(&c, 1);
+    return c;
+  });
 
   return Parse(filename, contents, err);
 }

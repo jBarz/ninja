@@ -22,6 +22,16 @@ run everything under a Visual Studio Tools Command Prompt (or after
 running `vcvarsall` in a normal command prompt).  See below if you
 want to use mingw or some other compiler instead of Visual Studio.
 
+#### Zos
+
+    export PATH=$PYTHONDIR/bin:<path to njsc compiler>:$PATH
+    export LIBPATH=$PYTHONDIR/lib:$LIBPATH
+    export _BPXK_AUTOCVT=ON
+    export AR=ar
+    git clone https://github.com/jBarz/ninja
+    cd ninja
+    python ./configure.py --bootstrap
+
 ### Adjusting build flags
 
 Build in "debug" mode while developing (disables optimizations and builds

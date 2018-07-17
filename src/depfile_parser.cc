@@ -15,6 +15,16 @@
 
 #include "depfile_parser.h"
 
+#ifdef __MVS__
+constexpr char EBCDIC2ASCII[] = {
+0,1,2,3,156,9,134,127,151,141,142,11,12,13,14,15,16,17,18,19,157,10,8,135,24,25,146,143,28,29,30,31,128,129,130,131,132,133,23,27,136,137,138,139,140,5,6,7,144,145,22,147,148,149,150,4,152,153,154,155,20,21,158,26,32,160,226,228,224,225,227,229,231,241,162,46,60,40,43,124,38,233,234,235,232,237,238,239,236,223,33,36,42,41,59,94,45,47,194,196,192,193,195,197,199,209,166,44,37,95,62,63,248,201,202,203,200,205,206,207,204,96,58,35,64,39,61,34,216,97,98,99,100,101,102,103,104,105,171,187,240,253,254,177,176,106,107,108,109,110,111,112,113,114,170,186,230,184,198,164,181,126,115,116,117,118,119,120,121,122,161,191,208,91,222,174,172,163,165,183,169,167,182,188,189,190,221,168,175,93,180,215,123,65,66,67,68,69,70,71,72,73,173,244,246,242,243,245,125,74,75,76,77,78,79,80,81,82,185,251,252,249,250,255,92,247,83,84,85,86,87,88,89,90,178,212,214,210,211,213,48,49,50,51,52,53,54,55,56,57,179,219,220,217,218
+};
+# define TO_ASCII(x) EBCDIC2ASCII[(int)(x)]
+# include <unistd.h>
+#else
+# define TO_ASCII(x) x
+#endif
+
 // A note on backslashes in Makefiles, from reading the docs:
 // Backslash-newline is the line continuation character.
 // Backslash-# escapes a # (otherwise meaningful as a comment start).
@@ -33,8 +43,13 @@ bool DepfileParser::Parse(string* content, string* err) {
   // in: current parser input point.
   // end: end of input.
   // parsing_targets: whether we are parsing targets or dependencies.
-  char* in = &(*content)[0];
-  char* end = in + content->size();
+  vector<char> asciicontent;
+  std::transform(content->begin(), content->end(), back_inserter(asciicontent), [] (char c) -> char {
+    __e2a_l(&c, 1);
+    return c;
+  });
+  char* in = &(asciicontent)[0];
+  char* end = in + asciicontent.size();
   bool parsing_targets = true;
   while (in < end) {
     // out: current output point (typically same as in, but can fall behind
@@ -84,42 +99,42 @@ bool DepfileParser::Parse(string* content, string* err) {
       };
 
       yych = *in;
-      if (yych <= '=') {
-        if (yych <= '$') {
-          if (yych <= ' ') {
+      if (yych <= TO_ASCII('=')) {
+        if (yych <= TO_ASCII('$')) {
+          if (yych <= TO_ASCII(' ')) {
             if (yych <= 0x00) goto yy7;
             goto yy9;
           } else {
-            if (yych <= '!') goto yy5;
-            if (yych <= '#') goto yy9;
+            if (yych <= TO_ASCII('!')) goto yy5;
+            if (yych <= TO_ASCII('#')) goto yy9;
             goto yy4;
           }
         } else {
-          if (yych <= '*') {
-            if (yych <= '\'') goto yy9;
-            if (yych <= ')') goto yy5;
+          if (yych <= TO_ASCII('*')) {
+            if (yych <= TO_ASCII('\'')) goto yy9;
+            if (yych <= TO_ASCII(')')) goto yy5;
             goto yy9;
           } else {
-            if (yych <= ':') goto yy5;
-            if (yych <= '<') goto yy9;
+            if (yych <= TO_ASCII(':')) goto yy5;
+            if (yych <= TO_ASCII('<')) goto yy9;
             goto yy5;
           }
         }
       } else {
-        if (yych <= '_') {
-          if (yych <= '[') {
-            if (yych <= '?') goto yy9;
-            if (yych <= 'Z') goto yy5;
+        if (yych <= TO_ASCII('_')) {
+          if (yych <= TO_ASCII('[')) {
+            if (yych <= TO_ASCII('?')) goto yy9;
+            if (yych <= TO_ASCII('Z')) goto yy5;
             goto yy9;
           } else {
-            if (yych <= '\\') goto yy2;
-            if (yych <= '^') goto yy9;
+            if (yych <= TO_ASCII('\\')) goto yy2;
+            if (yych <= TO_ASCII('^')) goto yy9;
             goto yy5;
           }
         } else {
-          if (yych <= '|') {
-            if (yych <= '`') goto yy9;
-            if (yych <= '{') goto yy5;
+          if (yych <= TO_ASCII('|')) {
+            if (yych <= TO_ASCII('`')) goto yy9;
+            if (yych <= TO_ASCII('{')) goto yy5;
             goto yy9;
           } else {
             if (yych == 0x7F) goto yy9;
@@ -129,23 +144,23 @@ bool DepfileParser::Parse(string* content, string* err) {
       }
 yy2:
       ++in;
-      if ((yych = *in) <= '"') {
-        if (yych <= '\f') {
+      if ((yych = *in) <= TO_ASCII('"')) {
+        if (yych <= TO_ASCII('\f')) {
           if (yych <= 0x00) goto yy3;
-          if (yych != '\n') goto yy14;
+          if (yych != TO_ASCII('\n')) goto yy14;
         } else {
-          if (yych <= '\r') goto yy3;
-          if (yych == ' ') goto yy16;
+          if (yych <= TO_ASCII('\r')) goto yy3;
+          if (yych == TO_ASCII(' ')) goto yy16;
           goto yy14;
         }
       } else {
-        if (yych <= 'Z') {
-          if (yych <= '#') goto yy16;
-          if (yych == '*') goto yy16;
+        if (yych <= TO_ASCII('Z')) {
+          if (yych <= TO_ASCII('#')) goto yy16;
+          if (yych == TO_ASCII('*')) goto yy16;
           goto yy14;
         } else {
-          if (yych <= '\\') goto yy16;
-          if (yych == '|') goto yy16;
+          if (yych <= TO_ASCII('\\')) goto yy16;
+          if (yych == TO_ASCII('|')) goto yy16;
           goto yy14;
         }
       }
@@ -157,7 +172,7 @@ yy3:
       }
 yy4:
       yych = *++in;
-      if (yych == '$') goto yy12;
+      if (yych == TO_ASCII('$')) goto yy12;
       goto yy3;
 yy5:
       ++in;
@@ -193,14 +208,14 @@ yy12:
       ++in;
       {
         // De-escape dollar character.
-        *out++ = '$';
+        *out++ = TO_ASCII('$');
         continue;
       }
 yy14:
       ++in;
       {
         // Let backslash before other characters through verbatim.
-        *out++ = '\\';
+        *out++ = TO_ASCII('\\');
         *out++ = yych;
         continue;
       }
@@ -217,7 +232,7 @@ yy16:
 
     int len = (int)(out - filename);
     const bool is_target = parsing_targets;
-    if (len > 0 && filename[len - 1] == ':') {
+    if (len > 0 && filename[len - 1] == TO_ASCII(':')) {
       len--;  // Strip off trailing colon, if any.
       parsing_targets = false;
     }

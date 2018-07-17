@@ -19,13 +19,25 @@
 
 #include "eval_env.h"
 #include "util.h"
+#ifdef __MVS__
+# include <unistd.h>
+#endif
+
+#ifdef __MVS__
+constexpr char EBCDIC2ASCII[] = {
+0,1,2,3,156,9,134,127,151,141,142,11,12,13,14,15,16,17,18,19,157,10,8,135,24,25,146,143,28,29,30,31,128,129,130,131,132,133,23,27,136,137,138,139,140,5,6,7,144,145,22,147,148,149,150,4,152,153,154,155,20,21,158,26,32,160,226,228,224,225,227,229,231,241,162,46,60,40,43,124,38,233,234,235,232,237,238,239,236,223,33,36,42,41,59,94,45,47,194,196,192,193,195,197,199,209,166,44,37,95,62,63,248,201,202,203,200,205,206,207,204,96,58,35,64,39,61,34,216,97,98,99,100,101,102,103,104,105,171,187,240,253,254,177,176,106,107,108,109,110,111,112,113,114,170,186,230,184,198,164,181,126,115,116,117,118,119,120,121,122,161,191,208,91,222,174,172,163,165,183,169,167,182,188,189,190,221,168,175,93,180,215,123,65,66,67,68,69,70,71,72,73,173,244,246,242,243,245,125,74,75,76,77,78,79,80,81,82,185,251,252,249,250,255,92,247,83,84,85,86,87,88,89,90,178,212,214,210,211,213,48,49,50,51,52,53,54,55,56,57,179,219,220,217,218
+};
+# define TO_ASCII(x) EBCDIC2ASCII[(int)(x)]
+#else
+# define TO_ASCII(x) x
+#endif
 
 bool Lexer::Error(const string& message, string* err) {
   // Compute line/column.
   int line = 1;
   const char* line_start = input_.str_;
   for (const char* p = input_.str_; p < last_token_; ++p) {
-    if (*p == '\n') {
+    if (*p == TO_ASCII('\n')) {
       ++line;
       line_start = p + 1;
     }
@@ -43,12 +55,20 @@ bool Lexer::Error(const string& message, string* err) {
     int len;
     bool truncated = true;
     for (len = 0; len < kTruncateColumn; ++len) {
-      if (line_start[len] == 0 || line_start[len] == '\n') {
+      if (line_start[len] == 0 || line_start[len] == TO_ASCII('\n')) {
         truncated = false;
         break;
       }
     }
-    *err += string(line_start, len);
+
+    string j(line_start, len);
+    std::transform(j.begin(), j.end(), j.begin(), [] (char c) -> char {
+      char d = c;
+      __a2e_l(&d, 1);
+      return d;
+    });
+
+    *err += j;
     if (truncated)
       *err += "...";
     *err += "\n";
@@ -60,7 +80,13 @@ bool Lexer::Error(const string& message, string* err) {
 }
 
 Lexer::Lexer(const char* input) {
-  Start("input", input);
+  vector<char> ascii;
+  std::transform(input, input + strlen(input) + 1, back_inserter(ascii), [] (char c) -> char {
+    char d = c;
+    __e2a_l(&d, 1);
+    return d;
+  });
+  Start("input", &ascii[0]);
 }
 
 void Lexer::Start(StringPiece filename, StringPiece input) {
@@ -103,7 +129,7 @@ const char* Lexer::TokenErrorHint(Token expected) {
 string Lexer::DescribeLastError() {
   if (last_token_) {
     switch (last_token_[0]) {
-    case '\t':
+    case TO_ASCII('\t'):
       return "tabs are not allowed, use spaces";
     }
   }
@@ -161,65 +187,66 @@ Lexer::Token Lexer::ReadToken() {
 	};
 
 	yych = *p;
-	if (yych <= 'Z') {
-		if (yych <= '#') {
-			if (yych <= '\f') {
+	if (yych <= TO_ASCII('Z')) {
+		if (yych <= TO_ASCII('#')) {
+			if (yych <= TO_ASCII('\f')) {
 				if (yych <= 0x00) goto yy23;
-				if (yych == '\n') goto yy7;
+				if (yych == TO_ASCII('\n')) goto yy7;
 				goto yy25;
 			} else {
 				if (yych <= 0x1F) {
-					if (yych <= '\r') goto yy6;
+					if (yych <= TO_ASCII('\r')) goto yy6;
 					goto yy25;
 				} else {
-					if (yych <= ' ') goto yy2;
-					if (yych <= '"') goto yy25;
+					if (yych <= TO_ASCII(' ')) goto yy2;
+					if (yych <= TO_ASCII('"')) goto yy25;
 					goto yy4;
 				}
 			}
 		} else {
-			if (yych <= '9') {
-				if (yych <= ',') goto yy25;
-				if (yych == '/') goto yy25;
+			if (yych <= TO_ASCII('9')) {
+				if (yych <= TO_ASCII(',')) goto yy25;
+				if (yych == TO_ASCII('/')) goto yy25;
 				goto yy22;
 			} else {
-				if (yych <= '<') {
-					if (yych <= ':') goto yy16;
+				if (yych <= TO_ASCII('<')) {
+					if (yych <= TO_ASCII(':')) goto yy16;
 					goto yy25;
 				} else {
-					if (yych <= '=') goto yy14;
-					if (yych <= '@') goto yy25;
+					if (yych <= TO_ASCII('=')) goto yy14;
+printf("here %d\n", __LINE__);
+					if (yych <= TO_ASCII('@')) goto yy25;
 					goto yy22;
 				}
 			}
 		}
 	} else {
-		if (yych <= 'i') {
-			if (yych <= 'a') {
-				if (yych == '_') goto yy22;
-				if (yych <= '`') goto yy25;
+		if (yych <= TO_ASCII('i')) {
+			if (yych <= TO_ASCII('a')) {
+				if (yych == TO_ASCII('_')) goto yy22;
+				if (yych <= TO_ASCII('`')) goto yy25;
 				goto yy22;
 			} else {
-				if (yych <= 'c') {
-					if (yych <= 'b') goto yy9;
+				if (yych <= TO_ASCII('c')) {
+					if (yych <= TO_ASCII('b')) goto yy9;
 					goto yy22;
 				} else {
-					if (yych <= 'd') goto yy13;
-					if (yych <= 'h') goto yy22;
+					if (yych <= TO_ASCII('d')) goto yy13;
+					if (yych <= TO_ASCII('h')) goto yy22;
 					goto yy20;
 				}
 			}
 		} else {
-			if (yych <= 'r') {
-				if (yych == 'p') goto yy11;
-				if (yych <= 'q') goto yy22;
+			if (yych <= TO_ASCII('r')) {
+				if (yych == TO_ASCII('p')) goto yy11;
+				if (yych <= TO_ASCII('q')) goto yy22;
 				goto yy12;
 			} else {
-				if (yych <= 'z') {
-					if (yych <= 's') goto yy21;
+				if (yych <= TO_ASCII('z')) {
+					if (yych <= TO_ASCII('s')) goto yy21;
 					goto yy22;
 				} else {
-					if (yych == '|') goto yy18;
+					if (yych == TO_ASCII('|')) goto yy18;
 					goto yy25;
 				}
 			}
@@ -239,7 +266,7 @@ yy5:
 	{ token = ERROR;    break; }
 yy6:
 	yych = *++p;
-	if (yych == '\n') goto yy65;
+	if (yych == TO_ASCII('\n')) goto yy65;
 	goto yy5;
 yy7:
 	++p;
@@ -247,21 +274,21 @@ yy8:
 	{ token = NEWLINE;  break; }
 yy9:
 	++p;
-	if ((yych = *p) == 'u') goto yy60;
+	if ((yych = *p) == TO_ASCII('u')) goto yy60;
 	goto yy27;
 yy10:
 	{ token = IDENT;    break; }
 yy11:
 	yych = *++p;
-	if (yych == 'o') goto yy56;
+	if (yych == TO_ASCII('o')) goto yy56;
 	goto yy27;
 yy12:
 	yych = *++p;
-	if (yych == 'u') goto yy52;
+	if (yych == TO_ASCII('u')) goto yy52;
 	goto yy27;
 yy13:
 	yych = *++p;
-	if (yych == 'e') goto yy45;
+	if (yych == TO_ASCII('e')) goto yy45;
 	goto yy27;
 yy14:
 	++p;
@@ -271,15 +298,15 @@ yy16:
 	{ token = COLON;    break; }
 yy18:
 	++p;
-	if ((yych = *p) == '|') goto yy43;
+	if ((yych = *p) == TO_ASCII('|')) goto yy43;
 	{ token = PIPE;     break; }
 yy20:
 	yych = *++p;
-	if (yych == 'n') goto yy36;
+	if (yych == TO_ASCII('n')) goto yy36;
 	goto yy27;
 yy21:
 	yych = *++p;
-	if (yych == 'u') goto yy28;
+	if (yych == TO_ASCII('u')) goto yy28;
 	goto yy27;
 yy22:
 	yych = *++p;
@@ -300,17 +327,17 @@ yy27:
 	goto yy10;
 yy28:
 	yych = *++p;
-	if (yych != 'b') goto yy27;
+	if (yych != TO_ASCII('b')) goto yy27;
 	yych = *++p;
-	if (yych != 'n') goto yy27;
+	if (yych != TO_ASCII('n')) goto yy27;
 	yych = *++p;
-	if (yych != 'i') goto yy27;
+	if (yych != TO_ASCII('i')) goto yy27;
 	yych = *++p;
-	if (yych != 'n') goto yy27;
+	if (yych != TO_ASCII('n')) goto yy27;
 	yych = *++p;
-	if (yych != 'j') goto yy27;
+	if (yych != TO_ASCII('j')) goto yy27;
 	yych = *++p;
-	if (yych != 'a') goto yy27;
+	if (yych != TO_ASCII('a')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -318,15 +345,15 @@ yy28:
 	{ token = SUBNINJA; break; }
 yy36:
 	yych = *++p;
-	if (yych != 'c') goto yy27;
+	if (yych != TO_ASCII('c')) goto yy27;
 	yych = *++p;
-	if (yych != 'l') goto yy27;
+	if (yych != TO_ASCII('l')) goto yy27;
 	yych = *++p;
-	if (yych != 'u') goto yy27;
+	if (yych != TO_ASCII('u')) goto yy27;
 	yych = *++p;
-	if (yych != 'd') goto yy27;
+	if (yych != TO_ASCII('d')) goto yy27;
 	yych = *++p;
-	if (yych != 'e') goto yy27;
+	if (yych != TO_ASCII('e')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -337,15 +364,15 @@ yy43:
 	{ token = PIPE2;    break; }
 yy45:
 	yych = *++p;
-	if (yych != 'f') goto yy27;
+	if (yych != TO_ASCII('f')) goto yy27;
 	yych = *++p;
-	if (yych != 'a') goto yy27;
+	if (yych != TO_ASCII('a')) goto yy27;
 	yych = *++p;
-	if (yych != 'u') goto yy27;
+	if (yych != TO_ASCII('u')) goto yy27;
 	yych = *++p;
-	if (yych != 'l') goto yy27;
+	if (yych != TO_ASCII('l')) goto yy27;
 	yych = *++p;
-	if (yych != 't') goto yy27;
+	if (yych != TO_ASCII('t')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -353,9 +380,9 @@ yy45:
 	{ token = DEFAULT;  break; }
 yy52:
 	yych = *++p;
-	if (yych != 'l') goto yy27;
+	if (yych != TO_ASCII('l')) goto yy27;
 	yych = *++p;
-	if (yych != 'e') goto yy27;
+	if (yych != TO_ASCII('e')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -363,9 +390,9 @@ yy52:
 	{ token = RULE;     break; }
 yy56:
 	yych = *++p;
-	if (yych != 'o') goto yy27;
+	if (yych != TO_ASCII('o')) goto yy27;
 	yych = *++p;
-	if (yych != 'l') goto yy27;
+	if (yych != TO_ASCII('l')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -373,11 +400,11 @@ yy56:
 	{ token = POOL;     break; }
 yy60:
 	yych = *++p;
-	if (yych != 'i') goto yy27;
+	if (yych != TO_ASCII('i')) goto yy27;
 	yych = *++p;
-	if (yych != 'l') goto yy27;
+	if (yych != TO_ASCII('l')) goto yy27;
 	yych = *++p;
-	if (yych != 'd') goto yy27;
+	if (yych != TO_ASCII('d')) goto yy27;
 	++p;
 	if (yybm[0+(yych = *p)] & 32) {
 		goto yy26;
@@ -412,18 +439,18 @@ yy73:
 	if (yybm[0+yych] & 128) {
 		goto yy72;
 	}
-	if (yych <= '\f') {
-		if (yych != '\n') goto yy3;
+	if (yych <= TO_ASCII('\f')) {
+		if (yych != TO_ASCII('\n')) goto yy3;
 	} else {
-		if (yych <= '\r') goto yy75;
-		if (yych == '#') goto yy67;
+		if (yych <= TO_ASCII('\r')) goto yy75;
+		if (yych == TO_ASCII('#')) goto yy67;
 		goto yy3;
 	}
 	yych = *++p;
 	goto yy8;
 yy75:
 	++p;
-	if ((yych = *p) == '\n') goto yy65;
+	if ((yych = *p) == TO_ASCII('\n')) goto yy65;
 	goto yy69;
 }
 
@@ -487,11 +514,11 @@ void Lexer::EatWhitespace() {
 		  0,   0,   0,   0,   0,   0,   0,   0, 
 	};
 	yych = *p;
-	if (yych <= ' ') {
+	if (yych <= TO_ASCII(' ')) {
 		if (yych <= 0x00) goto yy82;
 		if (yych <= 0x1F) goto yy84;
 	} else {
-		if (yych == '$') goto yy80;
+		if (yych == TO_ASCII('$')) goto yy80;
 		goto yy84;
 	}
 	++p;
@@ -501,8 +528,8 @@ yy79:
 	{ continue; }
 yy80:
 	yych = *(q = ++p);
-	if (yych == '\n') goto yy85;
-	if (yych == '\r') goto yy87;
+	if (yych == TO_ASCII('\n')) goto yy85;
+	if (yych == TO_ASCII('\r')) goto yy87;
 yy81:
 	{ break; }
 yy82:
@@ -516,7 +543,7 @@ yy85:
 	{ continue; }
 yy87:
 	yych = *++p;
-	if (yych == '\n') goto yy89;
+	if (yych == TO_ASCII('\n')) goto yy89;
 	p = q;
 	goto yy81;
 yy89:
@@ -578,20 +605,20 @@ bool Lexer::ReadIdent(string* out) {
 		  0,   0,   0,   0,   0,   0,   0,   0, 
 	};
 	yych = *p;
-	if (yych <= '@') {
-		if (yych <= '.') {
-			if (yych <= ',') goto yy97;
+	if (yych <= TO_ASCII('@')) {
+		if (yych <= TO_ASCII('.')) {
+			if (yych <= TO_ASCII(',')) goto yy97;
 		} else {
-			if (yych <= '/') goto yy97;
-			if (yych >= ':') goto yy97;
+			if (yych <= TO_ASCII('/')) goto yy97;
+			if (yych >= TO_ASCII(':')) goto yy97;
 		}
 	} else {
-		if (yych <= '_') {
-			if (yych <= 'Z') goto yy95;
-			if (yych <= '^') goto yy97;
+		if (yych <= TO_ASCII('_')) {
+			if (yych <= TO_ASCII('Z')) goto yy95;
+			if (yych <= TO_ASCII('^')) goto yy97;
 		} else {
-			if (yych <= '`') goto yy97;
-			if (yych >= '{') goto yy97;
+			if (yych <= TO_ASCII('`')) goto yy97;
+			if (yych >= TO_ASCII('{')) goto yy97;
 		}
 	}
 yy95:
@@ -623,6 +650,14 @@ yy100:
   last_token_ = start;
   ofs_ = p;
   EatWhitespace();
+
+#ifdef __MVS__
+  std::transform(out->begin(), out->end(), out->begin(), [] (char c) -> char {
+    __a2e_l(&c, 1);
+    return c;
+  });
+#endif
+
   return true;
 }
 
@@ -670,20 +705,20 @@ bool Lexer::ReadEvalString(EvalString* eval, bool path, string* err) {
 		128, 128, 128, 128, 128, 128, 128, 128, 
 	};
 	yych = *p;
-	if (yych <= ' ') {
-		if (yych <= '\n') {
+	if (yych <= TO_ASCII(' ')) {
+		if (yych <= TO_ASCII('\n')) {
 			if (yych <= 0x00) goto yy110;
-			if (yych >= '\n') goto yy107;
+			if (yych >= TO_ASCII('\n')) goto yy107;
 		} else {
-			if (yych == '\r') goto yy105;
-			if (yych >= ' ') goto yy107;
+			if (yych == TO_ASCII('\r')) goto yy105;
+			if (yych >= TO_ASCII(' ')) goto yy107;
 		}
 	} else {
-		if (yych <= '9') {
-			if (yych == '$') goto yy109;
+		if (yych <= TO_ASCII('9')) {
+			if (yych == TO_ASCII('$')) goto yy109;
 		} else {
-			if (yych <= ':') goto yy107;
-			if (yych == '|') goto yy107;
+			if (yych <= TO_ASCII(':')) goto yy107;
+			if (yych == TO_ASCII('|')) goto yy107;
 		}
 	}
 	++p;
@@ -691,12 +726,17 @@ bool Lexer::ReadEvalString(EvalString* eval, bool path, string* err) {
 	goto yy140;
 yy104:
 	{
-      eval->AddText(StringPiece(start, p - start));
-      continue;
-    }
+		vector<char> txt;
+		std::transform(start, p, back_inserter(txt), [] (char c) -> char {
+				__a2e_l(&c, 1);
+				return c;
+				});
+		eval->AddText(StringPiece(&txt[0], txt.size()));
+		continue;
+	}
 yy105:
 	++p;
-	if ((yych = *p) == '\n') goto yy137;
+	if ((yych = *p) == TO_ASCII('\n')) goto yy137;
 	{
       last_token_ = start;
       return Error(DescribeLastError(), err);
@@ -708,50 +748,55 @@ yy107:
         p = start;
         break;
       } else {
-        if (*start == '\n')
+        if (*start == TO_ASCII('\n'))
           break;
-        eval->AddText(StringPiece(start, 1));
+	vector<char> txt;
+	std::transform(start, start + 1, back_inserter(txt), [] (char c) -> char {
+			__a2e_l(&c, 1);
+			return c;
+			});
+        eval->AddText(StringPiece(&txt[0], 1));
         continue;
       }
     }
 yy109:
 	yych = *++p;
-	if (yych <= '-') {
+	if (yych <= TO_ASCII('-')) {
 		if (yych <= 0x1F) {
-			if (yych <= '\n') {
-				if (yych <= '\t') goto yy112;
+			if (yych <= TO_ASCII('\n')) {
+				if (yych <= TO_ASCII('\t')) goto yy112;
 				goto yy124;
 			} else {
-				if (yych == '\r') goto yy114;
+				if (yych == TO_ASCII('\r')) goto yy114;
 				goto yy112;
 			}
 		} else {
-			if (yych <= '#') {
-				if (yych <= ' ') goto yy115;
+			if (yych <= TO_ASCII('#')) {
+				if (yych <= TO_ASCII(' ')) goto yy115;
 				goto yy112;
 			} else {
-				if (yych <= '$') goto yy117;
-				if (yych <= ',') goto yy112;
+				if (yych <= TO_ASCII('$')) goto yy117;
+				if (yych <= TO_ASCII(',')) goto yy112;
 				goto yy119;
 			}
 		}
 	} else {
-		if (yych <= 'Z') {
-			if (yych <= '9') {
-				if (yych <= '/') goto yy112;
+		if (yych <= TO_ASCII('Z')) {
+			if (yych <= TO_ASCII('9')) {
+				if (yych <= TO_ASCII('/')) goto yy112;
 				goto yy119;
 			} else {
-				if (yych <= ':') goto yy121;
-				if (yych <= '@') goto yy112;
+				if (yych <= TO_ASCII(':')) goto yy121;
+				if (yych <= TO_ASCII('@')) goto yy112;
 				goto yy119;
 			}
 		} else {
-			if (yych <= '`') {
-				if (yych == '_') goto yy119;
+			if (yych <= TO_ASCII('`')) {
+				if (yych == TO_ASCII('_')) goto yy119;
 				goto yy112;
 			} else {
-				if (yych <= 'z') goto yy119;
-				if (yych <= '{') goto yy123;
+				if (yych <= TO_ASCII('z')) goto yy119;
+				if (yych <= TO_ASCII('{')) goto yy123;
 				goto yy112;
 			}
 		}
@@ -771,7 +816,7 @@ yy113:
     }
 yy114:
 	yych = *++p;
-	if (yych == '\n') goto yy134;
+	if (yych == TO_ASCII('\n')) goto yy134;
 	goto yy113;
 yy115:
 	++p;
@@ -791,7 +836,12 @@ yy119:
 	goto yy133;
 yy120:
 	{
-      eval->AddSpecial(StringPiece(start + 1, p - start - 1));
+	vector<char> txt;
+	std::transform(start + 1, p, back_inserter(txt), [] (char c) -> char {
+			__a2e_l(&c, 1);
+			return c;
+			});
+      eval->AddSpecial(StringPiece(&txt[0], txt.size()));
       continue;
     }
 yy121:
@@ -821,13 +871,18 @@ yy127:
 	if (yybm[0+yych] & 32) {
 		goto yy127;
 	}
-	if (yych == '}') goto yy130;
+	if (yych == TO_ASCII('}')) goto yy130;
 	p = q;
 	goto yy113;
 yy130:
 	++p;
 	{
-      eval->AddSpecial(StringPiece(start + 2, p - start - 3));
+	vector<char> txt;
+	std::transform(start + 2, p - 1, back_inserter(txt), [] (char c) -> char {
+			__a2e_l(&c, 1);
+			return c;
+			});
+      eval->AddSpecial(StringPiece(&txt[0], txt.size()));
       continue;
     }
 yy132:
@@ -841,7 +896,7 @@ yy133:
 yy134:
 	++p;
 	yych = *p;
-	if (yych == ' ') goto yy134;
+	if (yych == TO_ASCII(' ')) goto yy134;
 	{
       continue;
     }

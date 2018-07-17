@@ -86,7 +86,11 @@ void LinePrinter::Print(string to_print, LineType type) {
       to_print = ElideMiddle(to_print, size.ws_col);
     }
     printf("%s", to_print.c_str());
+#ifdef __MVS__
+    printf("\x27[K");  // Clear to end of line.
+#else
     printf("\x1B[K");  // Clear to end of line.
+#endif
     fflush(stdout);
 #endif
 

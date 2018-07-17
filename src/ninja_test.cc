@@ -18,7 +18,7 @@
 
 #ifdef _WIN32
 #include "getopt.h"
-#elif defined(_AIX)
+#elif defined(_AIX) || defined (__MVS__)
 #include "getopt.h"
 #include <unistd.h>
 #else
